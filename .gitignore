@@ -8,12 +8,14 @@ venv/
 .venv/
 env/
 
-# Model checkpoints / weights
+# Model checkpoints / weights (train your own or download separately)
+checkpoints/
 *.pth
 *.pt
 *.ckpt
 *.bin
 *.h5
+*.tmp
 
 # Generated Python/data artifacts
 *.pkl
@@ -24,6 +26,11 @@ env/
 # Large COCO datasets
 /data/train2017/
 /data/val2017/
+/data/coco2017/
+
+# Local test files and notebooks
+test/
+.ipynb_checkpoints/
 
 # IDE / OS files
 .vscode/
