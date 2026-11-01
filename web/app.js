@@ -88,8 +88,9 @@ async function generateCaption(file) {
   if (activeController) {
     activeController.abort();
   }
-  activeController = new AbortController();
-  const timeoutId = window.setTimeout(() => activeController.abort(), 60000);
+  const controller = new AbortController();
+  activeController = controller;
+  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
   const formData = new FormData();
   formData.append("file", file);
 
@@ -98,7 +99,7 @@ async function generateCaption(file) {
     const response = await fetch(`${apiBase}/api/caption`, {
       method: "POST",
       body: formData,
-      signal: activeController.signal,
+      signal: controller.signal,
     });
     if (!response.ok) {
       throw new Error(await readError(response));
@@ -115,7 +116,9 @@ async function generateCaption(file) {
     elements.retryButton.hidden = false;
   } finally {
     window.clearTimeout(timeoutId);
-    activeController = null;
+    if (activeController === controller) {
+      activeController = null;
+    }
     elements.loadingState.hidden = true;
   }
 }
