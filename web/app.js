@@ -1,6 +1,11 @@
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const ALLOWED_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
+const EXAMPLES = [
+  { src: "/examples/example1.jpg", label: "Example 1" },
+  { src: "/examples/example2.jpg", label: "Example 2" },
+  { src: "/examples/example3.jpg", label: "Example 3" },
+];
 
 // Keep all DOM lookups together so the UI dependencies are easy to audit.
 const elements = {
@@ -8,12 +13,14 @@ const elements = {
   uploadArea: document.querySelector("#upload-area"),
   fileInput: document.querySelector("#file-input"),
   uploadError: document.querySelector("#upload-error"),
+  exampleList: document.querySelector("#example-list"),
   resultState: document.querySelector("#result-state"),
   previewImage: document.querySelector("#preview-image"),
   heatmapStack: document.querySelector("#heatmap-stack"),
   heatmapBase: document.querySelector("#heatmap-base"),
   heatmapOverlay: document.querySelector("#heatmap-overlay"),
   loadingState: document.querySelector("#loading-state"),
+  loadingText: document.querySelector("#loading-state span:last-child"),
   caption: document.querySelector("#caption"),
   resultError: document.querySelector("#result-error"),
   heatmapControls: document.querySelector("#heatmap-controls"),
@@ -26,6 +33,7 @@ const elements = {
   heatmapGrid: document.querySelector("#heatmap-grid"),
   retryButton: document.querySelector("#retry-button"),
   chooseButton: document.querySelector("#choose-button"),
+  repoLink: document.querySelector("#repo-link"),
 };
 
 let lastResult = null;
@@ -33,6 +41,8 @@ let selectedFile = null;
 let previewUrl = null;
 let activeController = null;
 let activeTimeoutId = null;
+let activeSlowTimeoutId = null;
+let requestTimedOut = false;
 let heatmapMode = false;
 let selectedIndex = 0;
 
@@ -64,6 +74,9 @@ function isAllowedFile(file) {
 function setLoading(loading) {
   elements.loadingState.hidden = !loading;
   elements.retryButton.hidden = loading;
+  elements.loadingText.textContent = loading
+    ? "Generating caption..."
+    : "";
   if (loading) {
     elements.caption.textContent = "";
     clearError(elements.resultError);
@@ -154,6 +167,77 @@ function setHeatmapMode(on) {
   }
 }
 
+function friendlyRequestError(error) {
+  if (error.name === "AbortError" && requestTimedOut) {
+    return "This is taking too long. Please try again.";
+  }
+  if (navigator.onLine === false) {
+    return "You are offline.";
+  }
+  if (error.status === 413) {
+    return "That image is too large (max 5 MB).";
+  }
+  if (error.status === 415) {
+    return "Please upload a PNG, JPEG or WEBP image.";
+  }
+  if (error.status === 400) {
+    return "That file could not be read as an image.";
+  }
+  if (error.status === 429) {
+    return "Too many requests, please wait a moment.";
+  }
+  if (error.status >= 500) {
+    return "Something went wrong on the server. Please try again.";
+  }
+  return "Cannot reach the server. Check your connection.";
+}
+
+function renderExamples() {
+  EXAMPLES.forEach(({ src, label }) => {
+    const button = document.createElement("button");
+    const image = document.createElement("img");
+    button.type = "button";
+    button.className = "example-button";
+    button.setAttribute("aria-label", label);
+    button.addEventListener("click", () => loadExample(src, label, button));
+    image.src = src;
+    image.alt = label;
+    button.append(image);
+    elements.exampleList.append(button);
+  });
+}
+
+async function loadExample(src, label, button) {
+  clearError(elements.uploadError);
+  button.disabled = true;
+  try {
+    const response = await fetch(src);
+    if (!response.ok) {
+      throw new Error("Example image could not be loaded.");
+    }
+    const blob = await response.blob();
+    const filename = src.split("/").pop() || `${label.toLowerCase().replace(/\s+/g, "-")}.jpg`;
+    handleFile(new File([blob], filename, { type: "image/jpeg" }));
+  } catch {
+    showError("We could not load that example image. Please try again.", elements.uploadError);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function warmUpServer() {
+  const apiBase = window.APP_CONFIG?.API_BASE || "";
+  fetch(`${apiBase}/api/health`).catch(() => {});
+}
+
+function updateRepositoryLink() {
+  const repoUrl = window.APP_CONFIG?.REPO_URL || "";
+  if (repoUrl) {
+    elements.repoLink.href = repoUrl;
+    elements.repoLink.hidden = false;
+  }
+}
+
 function resetHeatmapState() {
   heatmapMode = false;
   selectedIndex = 0;
@@ -192,6 +276,11 @@ function resetPage() {
     window.clearTimeout(activeTimeoutId);
     activeTimeoutId = null;
   }
+  if (activeSlowTimeoutId !== null) {
+    window.clearTimeout(activeSlowTimeoutId);
+    activeSlowTimeoutId = null;
+  }
+  requestTimedOut = false;
   if (previewUrl) {
     URL.revokeObjectURL(previewUrl);
     previewUrl = null;
@@ -204,6 +293,7 @@ function resetPage() {
   elements.uploadState.hidden = false;
   elements.resultState.hidden = true;
   elements.loadingState.hidden = true;
+  elements.loadingText.textContent = "";
   elements.caption.textContent = "";
   elements.retryButton.hidden = true;
   clearError(elements.uploadError);
@@ -211,13 +301,10 @@ function resetPage() {
   elements.uploadArea.focus();
 }
 
-async function readError(response) {
-  try {
-    const body = await response.json();
-    return body.detail || body.error || body.message || `Request failed (${response.status}).`;
-  } catch {
-    return `Request failed (${response.status}).`;
-  }
+function readError(response) {
+  const error = new Error(`Request failed with status ${response.status}.`);
+  error.status = response.status;
+  return error;
 }
 
 async function generateCaption(file) {
@@ -227,10 +314,23 @@ async function generateCaption(file) {
   if (activeTimeoutId !== null) {
     window.clearTimeout(activeTimeoutId);
   }
+  if (activeSlowTimeoutId !== null) {
+    window.clearTimeout(activeSlowTimeoutId);
+  }
   const controller = new AbortController();
   activeController = controller;
-  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
+  const timeoutId = window.setTimeout(() => {
+    requestTimedOut = true;
+    controller.abort();
+  }, 60000);
   activeTimeoutId = timeoutId;
+  requestTimedOut = false;
+  const slowTimeoutId = window.setTimeout(() => {
+    if (activeController === controller) {
+      elements.loadingText.textContent = "The server is waking up, this can take up to a minute...";
+    }
+  }, 8000);
+  activeSlowTimeoutId = slowTimeoutId;
   const formData = new FormData();
   formData.append("file", file);
 
@@ -242,7 +342,7 @@ async function generateCaption(file) {
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(await readError(response));
+      throw await readError(response);
     }
     const result = await response.json();
     if (activeController !== controller) {
@@ -262,20 +362,21 @@ async function generateCaption(file) {
       return;
     }
     if (error.name === "AbortError") {
-      showError("The request took too long. Please try again.", elements.resultError);
+      showError(friendlyRequestError(error), elements.resultError);
     } else {
-      showError(
-        error.message || "We could not generate a caption. Please try again.",
-        elements.resultError,
-      );
+      showError(friendlyRequestError(error), elements.resultError);
     }
     elements.retryButton.hidden = false;
   } finally {
     window.clearTimeout(timeoutId);
+    window.clearTimeout(slowTimeoutId);
     if (activeController === controller) {
       activeController = null;
       activeTimeoutId = null;
+      activeSlowTimeoutId = null;
+      requestTimedOut = false;
       elements.loadingState.hidden = true;
+      elements.loadingText.textContent = "";
     }
   }
 }
@@ -286,12 +387,12 @@ function handleFile(file) {
     return;
   }
   if (!isAllowedFile(file)) {
-    showError("Please choose a PNG, JPEG, or WEBP image.", elements.uploadError);
+    showError("Please upload a PNG, JPEG or WEBP image.", elements.uploadError);
     return;
   }
   if (file.size > MAX_FILE_SIZE) {
     showError(
-      "That image is too large. Please choose a file no bigger than 5 MB.",
+      "That image is too large (max 5 MB).",
       elements.uploadError,
     );
     return;
@@ -388,3 +489,20 @@ window.addEventListener("dragover", (event) => {
 window.addEventListener("drop", (event) => {
   event.preventDefault();
 });
+
+document.addEventListener("paste", (event) => {
+  if (elements.uploadState.hidden) {
+    return;
+  }
+  const imageItem = Array.from(event.clipboardData?.items || [])
+    .find((item) => item.type.startsWith("image/"));
+  const file = imageItem?.getAsFile();
+  if (file) {
+    event.preventDefault();
+    handleFile(file);
+  }
+});
+
+renderExamples();
+updateRepositoryLink();
+warmUpServer();

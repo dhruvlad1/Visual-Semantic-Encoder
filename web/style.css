@@ -43,6 +43,7 @@
 body {
   min-width: 360px;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background: var(--page);
   color: var(--text);
@@ -57,8 +58,12 @@ input {
 .page-shell {
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
-  padding: 32px 16px;
+  padding: max(32px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
 }
 
 .card {
@@ -109,6 +114,7 @@ h1 {
 }
 
 .upload-area {
+  max-width: 100%;
   border: 2px dashed var(--border);
   border-radius: 16px;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
@@ -172,6 +178,45 @@ h1 {
   padding: 12px 14px;
   border-radius: 10px;
   font-size: 0.9rem;
+}
+
+.examples {
+  margin-top: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.examples p {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+}
+
+.example-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.example-button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 3px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--page);
+  cursor: pointer;
+}
+
+.example-button img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.25;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.example-button:hover {
+  border-color: var(--border-strong);
 }
 
 .error-message {
@@ -261,6 +306,7 @@ h1 {
 }
 
 .chip {
+  min-height: 44px;
   padding: 7px 11px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -304,6 +350,7 @@ h1 {
 
 .grid-item {
   overflow: hidden;
+  min-height: 44px;
   padding: 0;
   border: 2px solid transparent;
   border-radius: 12px;
@@ -346,6 +393,23 @@ h1 {
   cursor: pointer;
   font-weight: 700;
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.footer a {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .button:hover {
@@ -396,5 +460,9 @@ h1 {
 
   .card {
     border-radius: 18px;
+  }
+
+  .example-list {
+    gap: 6px;
   }
 }
