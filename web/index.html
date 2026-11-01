@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Generate captions for your images with visual attention.">
+  <title>Image Caption Generator</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/config.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="page-shell">
+    <section class="card" aria-labelledby="page-title">
+      <header class="intro">
+        <p class="eyebrow">Visual intelligence</p>
+        <h1 id="page-title">Image Caption Generator</h1>
+        <p class="description">Upload an image and let the model describe what it sees.</p>
+      </header>
+
+      <div class="upload-area" id="upload-area">
+        <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <label class="upload-label" for="file-input">
+          <span class="upload-icon" aria-hidden="true">↑</span>
+          <span class="upload-title">Choose an image</span>
+          <span class="upload-hint">or drag and drop PNG, JPEG, or WEBP here</span>
+          <span class="upload-limit">Maximum size: 5 MB</span>
+        </label>
+      </div>
+
+      <p class="message error-message" id="error-message" role="alert" hidden></p>
+
+      <div class="result-panel" id="result-panel" hidden>
+        <div class="preview-frame">
+          <img id="preview-image" alt="Selected image preview">
+        </div>
+        <div class="status-row" id="loading-state" aria-live="polite" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Generating caption...</span>
+        </div>
+        <p class="caption" id="caption" aria-live="polite"></p>
+      </div>
+
+      <div class="actions">
+        <button class="button secondary" id="retry-button" type="button" hidden>Try again</button>
+        <button class="button primary" id="choose-button" type="button" hidden>Choose another image</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
