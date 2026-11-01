@@ -180,11 +180,14 @@ h1 {
 }
 
 .result-panel {
+  margin-top: 24px;
+}
+
+.result-columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 28px;
   align-items: center;
-  margin-top: 24px;
 }
 
 .preview-frame {
@@ -200,6 +203,20 @@ h1 {
   width: 100%;
   max-height: 60vh;
   object-fit: contain;
+}
+
+.heatmap-stack {
+  display: grid;
+  position: relative;
+}
+
+.heatmap-stack img {
+  grid-area: 1 / 1;
+  height: auto;
+}
+
+.heatmap-stack img:last-child {
+  transition: opacity 160ms ease;
 }
 
 .status-row {
@@ -229,6 +246,89 @@ h1 {
   font-size: clamp(1.15rem, 3vw, 1.4rem);
   font-weight: 650;
   line-height: 1.45;
+}
+
+.heatmap-controls {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.word-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.chip:hover,
+.grid-item:hover {
+  border-color: var(--border-strong);
+}
+
+.strength-control {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#heatmap-strength {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.grid-item {
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--page);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.grid-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.25;
+  object-fit: cover;
+}
+
+.grid-item span {
+  display: block;
+  padding: 8px 10px;
+  font-weight: 650;
+}
+
+.grid-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 .actions {
@@ -278,8 +378,14 @@ h1 {
 }
 
 @media (max-width: 699px) {
-  .result-panel {
+  .result-columns {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heatmap-stack img:last-child {
+    transition: none;
   }
 }
 

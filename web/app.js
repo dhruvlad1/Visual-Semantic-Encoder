@@ -10,9 +10,20 @@ const elements = {
   uploadError: document.querySelector("#upload-error"),
   resultState: document.querySelector("#result-state"),
   previewImage: document.querySelector("#preview-image"),
+  heatmapStack: document.querySelector("#heatmap-stack"),
+  heatmapBase: document.querySelector("#heatmap-base"),
+  heatmapOverlay: document.querySelector("#heatmap-overlay"),
   loadingState: document.querySelector("#loading-state"),
   caption: document.querySelector("#caption"),
   resultError: document.querySelector("#result-error"),
+  heatmapControls: document.querySelector("#heatmap-controls"),
+  heatmapToggle: document.querySelector("#heatmap-toggle"),
+  wordChips: document.querySelector("#word-chips"),
+  selectedWord: document.querySelector("#selected-word"),
+  strengthValue: document.querySelector("#strength-value"),
+  heatmapStrength: document.querySelector("#heatmap-strength"),
+  downloadButton: document.querySelector("#download-button"),
+  heatmapGrid: document.querySelector("#heatmap-grid"),
   retryButton: document.querySelector("#retry-button"),
   chooseButton: document.querySelector("#choose-button"),
 };
@@ -22,6 +33,8 @@ let selectedFile = null;
 let previewUrl = null;
 let activeController = null;
 let activeTimeoutId = null;
+let heatmapMode = false;
+let selectedIndex = 0;
 
 function showError(message, target) {
   target.textContent = message;
@@ -57,6 +70,119 @@ function setLoading(loading) {
   }
 }
 
+function hasHeatmaps() {
+  return Boolean(
+    lastResult
+    && Array.isArray(lastResult.words)
+    && lastResult.words.length > 0
+    && Array.isArray(lastResult.heatmaps)
+    && lastResult.heatmaps.length === lastResult.words.length,
+  );
+}
+
+function renderChips() {
+  elements.wordChips.replaceChildren();
+  if (!hasHeatmaps()) {
+    return;
+  }
+  lastResult.words.forEach((word, index) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = word;
+    chip.setAttribute("aria-pressed", String(index === selectedIndex));
+    chip.addEventListener("click", () => selectWord(index));
+    elements.wordChips.append(chip);
+  });
+}
+
+function renderGrid() {
+  elements.heatmapGrid.replaceChildren();
+  if (!hasHeatmaps()) {
+    elements.heatmapGrid.hidden = true;
+    return;
+  }
+  lastResult.words.forEach((word, index) => {
+    const item = document.createElement("button");
+    const image = document.createElement("img");
+    const label = document.createElement("span");
+    item.type = "button";
+    item.className = "grid-item";
+    item.dataset.index = String(index);
+    item.addEventListener("click", () => selectWord(index));
+    image.src = lastResult.heatmaps[index];
+    image.alt = `Attention heatmap for the word "${word}"`;
+    label.textContent = word;
+    item.append(image, label);
+    elements.heatmapGrid.append(item);
+  });
+  elements.heatmapGrid.hidden = !heatmapMode;
+}
+
+function selectWord(index) {
+  if (!hasHeatmaps()) {
+    return;
+  }
+  selectedIndex = Math.max(0, Math.min(index, lastResult.words.length - 1));
+  const word = lastResult.words[selectedIndex];
+  elements.wordChips.querySelectorAll(".chip").forEach((chip, chipIndex) => {
+    chip.setAttribute("aria-pressed", String(chipIndex === selectedIndex));
+  });
+  elements.heatmapGrid.querySelectorAll(".grid-item").forEach((item, itemIndex) => {
+    item.classList.toggle("selected", itemIndex === selectedIndex);
+  });
+  elements.heatmapBase.src = lastResult.image;
+  elements.heatmapOverlay.src = lastResult.heatmaps[selectedIndex];
+  elements.heatmapOverlay.alt = `Attention heatmap for the word "${word}"`;
+  elements.selectedWord.textContent = word;
+  elements.downloadButton.disabled = false;
+}
+
+function setHeatmapMode(on) {
+  heatmapMode = on && hasHeatmaps();
+  elements.heatmapToggle.textContent = heatmapMode ? "Hide heatmap" : "Show heatmap";
+  elements.heatmapToggle.setAttribute("aria-pressed", String(heatmapMode));
+  elements.heatmapStack.hidden = !heatmapMode;
+  elements.previewImage.hidden = heatmapMode;
+  elements.wordChips.hidden = !heatmapMode;
+  elements.strengthValue.textContent = `${elements.heatmapStrength.value}%`;
+  elements.selectedWord.textContent = heatmapMode ? lastResult.words[selectedIndex] : "-";
+  elements.downloadButton.hidden = !heatmapMode;
+  elements.heatmapGrid.hidden = !heatmapMode;
+  if (heatmapMode) {
+    selectWord(selectedIndex);
+  }
+}
+
+function resetHeatmapState() {
+  heatmapMode = false;
+  selectedIndex = 0;
+  elements.heatmapStrength.value = "100";
+  elements.heatmapOverlay.style.opacity = "1";
+  elements.heatmapControls.hidden = true;
+  elements.heatmapStack.hidden = true;
+  elements.previewImage.hidden = false;
+  elements.wordChips.replaceChildren();
+  elements.heatmapGrid.replaceChildren();
+  elements.heatmapGrid.hidden = true;
+  elements.heatmapToggle.textContent = "Show heatmap";
+  elements.heatmapToggle.setAttribute("aria-pressed", "false");
+  elements.selectedWord.textContent = "-";
+  elements.strengthValue.textContent = "100%";
+  elements.downloadButton.hidden = true;
+}
+
+function downloadSelected() {
+  if (!hasHeatmaps()) {
+    return;
+  }
+  const word = String(lastResult.words[selectedIndex]).replace(/[\\/:*?"<>|]+/g, "_") || "word";
+  const link = document.createElement("a");
+  link.href = lastResult.heatmaps[selectedIndex];
+  link.download = `heatmap-${word}.png`;
+  link.click();
+}
+
 function resetPage() {
   if (activeController) {
     activeController.abort();
@@ -72,6 +198,7 @@ function resetPage() {
   }
   selectedFile = null;
   lastResult = null;
+  resetHeatmapState();
   elements.fileInput.value = "";
   elements.previewImage.removeAttribute("src");
   elements.uploadState.hidden = false;
@@ -117,9 +244,19 @@ async function generateCaption(file) {
     if (!response.ok) {
       throw new Error(await readError(response));
     }
-    lastResult = await response.json();
+    const result = await response.json();
+    if (activeController !== controller) {
+      return;
+    }
+    lastResult = result;
     elements.caption.textContent = formatCaption(lastResult.caption);
     elements.retryButton.hidden = true;
+    resetHeatmapState();
+    if (hasHeatmaps()) {
+      renderChips();
+      renderGrid();
+      elements.heatmapControls.hidden = false;
+    }
   } catch (error) {
     if (activeController !== controller) {
       return;
@@ -138,8 +275,8 @@ async function generateCaption(file) {
     if (activeController === controller) {
       activeController = null;
       activeTimeoutId = null;
+      elements.loadingState.hidden = true;
     }
-    elements.loadingState.hidden = true;
   }
 }
 
@@ -161,6 +298,7 @@ function handleFile(file) {
   }
 
   selectedFile = file;
+  resetHeatmapState();
   if (previewUrl) {
     URL.revokeObjectURL(previewUrl);
   }
@@ -213,6 +351,31 @@ elements.retryButton.addEventListener("click", () => {
     generateCaption(selectedFile);
   }
 });
+
+elements.heatmapToggle.addEventListener("click", () => {
+  setHeatmapMode(!heatmapMode);
+});
+
+elements.heatmapStrength.addEventListener("input", () => {
+  const value = Number(elements.heatmapStrength.value);
+  elements.heatmapOverlay.style.opacity = String(value / 100);
+  elements.strengthValue.textContent = `${value}%`;
+});
+
+elements.wordChips.addEventListener("keydown", (event) => {
+  if (!hasHeatmaps() || !["ArrowLeft", "ArrowRight"].includes(event.key)) {
+    return;
+  }
+  event.preventDefault();
+  const nextIndex = event.key === "ArrowRight"
+    ? selectedIndex + 1
+    : selectedIndex - 1;
+  const wrappedIndex = (nextIndex + lastResult.words.length) % lastResult.words.length;
+  selectWord(wrappedIndex);
+  elements.wordChips.children[wrappedIndex].focus();
+});
+
+elements.downloadButton.addEventListener("click", downloadSelected);
 
 elements.chooseButton.addEventListener("click", () => {
   resetPage();
