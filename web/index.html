@@ -18,33 +18,38 @@
         <p class="description">Upload an image and let the model describe what it sees.</p>
       </header>
 
-      <div class="upload-area" id="upload-area">
-        <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-        <label class="upload-label" for="file-input">
-          <span class="upload-icon" aria-hidden="true">↑</span>
-          <span class="upload-title">Choose an image</span>
-          <span class="upload-hint">or drag and drop PNG, JPEG, or WEBP here</span>
-          <span class="upload-limit">Maximum size: 5 MB</span>
-        </label>
+      <div id="upload-state">
+        <div class="upload-area" id="upload-area" tabindex="0" role="button"
+             aria-label="Choose an image or drag and drop one here">
+          <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+          <label class="upload-label" for="file-input">
+            <span class="upload-icon" aria-hidden="true">↑</span>
+            <span class="upload-title">Choose an image</span>
+            <span class="upload-hint">or drag and drop PNG, JPEG, or WEBP here</span>
+            <span class="upload-limit">Maximum size: 5 MB</span>
+          </label>
+        </div>
+        <p class="message error-message" id="upload-error" role="alert" hidden></p>
       </div>
 
-      <p class="message error-message" id="error-message" role="alert" hidden></p>
-
-      <div class="result-panel" id="result-panel" hidden>
+      <section class="result-panel" id="result-state" aria-labelledby="result-title" hidden>
+        <h2 id="result-title" class="visually-hidden">Caption result</h2>
         <div class="preview-frame">
           <img id="preview-image" alt="Selected image preview">
         </div>
-        <div class="status-row" id="loading-state" aria-live="polite" hidden>
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Generating caption...</span>
+        <div class="result-content">
+          <div class="status-row" id="loading-state" aria-live="polite" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Generating caption...</span>
+          </div>
+          <p class="caption" id="caption" aria-live="polite"></p>
+          <p class="message error-message" id="result-error" role="alert" hidden></p>
+          <div class="actions">
+            <button class="button secondary" id="retry-button" type="button" hidden>Try again</button>
+            <button class="button primary" id="choose-button" type="button">Choose another image</button>
+          </div>
         </div>
-        <p class="caption" id="caption" aria-live="polite"></p>
-      </div>
-
-      <div class="actions">
-        <button class="button secondary" id="retry-button" type="button" hidden>Try again</button>
-        <button class="button primary" id="choose-button" type="button" hidden>Choose another image</button>
-      </div>
+      </section>
     </section>
   </main>
 </body>
