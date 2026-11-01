@@ -43,10 +43,6 @@
         <div class="result-columns">
           <div class="preview-frame">
             <img id="preview-image" alt="Selected image preview">
-            <div class="heatmap-stack" id="heatmap-stack" hidden>
-              <img id="heatmap-base" alt="Original image">
-              <img id="heatmap-overlay" alt="">
-            </div>
           </div>
           <div class="result-content">
             <div class="status-row" id="loading-state" aria-live="polite" hidden>
@@ -57,13 +53,6 @@
             <p class="message error-message" id="result-error" role="alert" hidden></p>
             <div class="heatmap-controls" id="heatmap-controls" hidden>
               <button class="button secondary" id="heatmap-toggle" type="button">Show heatmap</button>
-              <div class="word-chips" id="word-chips" role="group" aria-label="Caption words"></div>
-              <label class="strength-control" for="heatmap-strength">
-                <span>Heatmap strength</span>
-                <span><strong id="selected-word">-</strong> <output id="strength-value">100%</output></span>
-              </label>
-              <input id="heatmap-strength" type="range" min="0" max="100" value="100">
-              <button class="button secondary" id="download-button" type="button">Download heatmap</button>
             </div>
             <div class="actions">
               <button class="button secondary" id="retry-button" type="button" hidden>Try again</button>
@@ -71,7 +60,13 @@
             </div>
           </div>
         </div>
-        <div class="heatmap-grid" id="heatmap-grid" hidden></div>
+        <section class="heatmap-figure" id="heatmap-figure" aria-labelledby="heatmap-heading" hidden>
+          <div class="heatmap-figure-header">
+            <h2 id="heatmap-heading">Where the model looked for each word</h2>
+            <button class="button secondary" id="download-button" type="button">Download heatmap</button>
+          </div>
+          <div class="heatmap-grid" id="heatmap-grid"></div>
+        </section>
       </section>
       <footer class="footer">
         <span>Captions come from a ResNet-50 + attention + LSTM model trained on MS COCO. They can be wrong, especially for unusual images.</span>
