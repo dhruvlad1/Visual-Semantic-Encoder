@@ -62,7 +62,7 @@ def load_for_inference(checkpoint_path, vocab_path=None, device="cpu"):
         raise ValueError(f"The vocabulary has {len(vocab)} words but the model expects {vocab_size}. "
                          "Use the vocab.txt that was created together with this checkpoint.")
 
-    model = CombinedModel(embed_size, hidden_size, vocab_size, attention_dim, pretrained=False).to(device)
+    model = CombinedModel(embed_size, hidden_size, vocab_size, attention_dim).to(device)
     model.load_state_dict(state)
     model.eval()
     return model, vocab

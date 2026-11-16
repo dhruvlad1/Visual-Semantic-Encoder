@@ -392,7 +392,7 @@ Implementation: EncoderCNN in models/encoder.py
 - Feature map is reshaped from (B, 512, H', W') into (B, num_pixels, 512)
 - Linear(512, embed_size) projects to the decoder embedding space
 
-Why this approach: It provides a fixed-length, spatially structured representation of the image without using a pretrained backbone.
+Why this approach: It provides a fixed-length, spatially structured representation of the image with a custom CNN trained from scratch.
 
 Complexity: O(B _ H _ W \* C) per image, with fixed CNN layers.
 
@@ -514,12 +514,12 @@ Retry/fallback behavior: Not implemented.
 
 ## 13. Important Technical Decisions
 
-Decision: Use a custom CNN + attention + LSTM implementation instead of a pretrained backbone.
+Decision: Use a custom ResNet-50-style CNN + attention + LSTM implementation trained from scratch.
 Why it was needed: The repository is intentionally compact and self-contained.
 Why this approach was chosen: The README and code emphasize a research-oriented, simple architecture. There is no evidence of a larger model ecosystem or transfer-learning pipeline.
 How it is implemented: EncoderCNN in models/encoder.py and DecoderWithAttention in models/decoder.py.
-Alternative approaches: Pretrained encoders (ResNet, CNN backbones), transformers, or pretrained image captioning models.
-Trade-offs: Lower baseline quality than modern pretrained systems, but clearer code and easier educational understanding.
+Alternative approaches: Other CNN backbones, transformers, or other image captioning models.
+Trade-offs: The from-scratch CNN needs enough data and epochs to train, while keeping the implementation clear and easy to study.
 
 Decision: Use teacher forcing during training.
 Why it was needed: The sequence model needs a stable training signal.
@@ -804,7 +804,7 @@ These are FUTURE improvements and not currently implemented:
 
 - Scalability
   - Add a validation split and early-stopping logic.
-  - Use larger and more modern CNN backbones or pretrained vision encoders.
+  - Use larger and more modern CNN backbones.
   - Experiment with transformer-based decoders for better sequence modeling.
 
 - Performance
@@ -934,7 +934,7 @@ Evidence/implementation: no distributed or async infrastructure is present.
 Relevant file/function: train.py.
 
 Q: How would you reduce latency?
-A: Replace greedy generation with beam search, reduce vocabulary size, or use a faster pretrained encoder; this is future work, not current code.
+A: Replace greedy generation with beam search, reduce vocabulary size, or experiment with a different CNN encoder; this is future work, not current code.
 Evidence/implementation: current generation uses argmax and a single-step loop.
 Relevant file/function: utils/visualization.py: predicted = output.argmax(1).
 
@@ -1042,7 +1042,7 @@ If I were to continue, I would add better evaluation, validation logic, and more
   - Caption generation with stop condition and attention visualization
 
 - Important design decisions:
-  - Custom CNN + attention + LSTM instead of pretrained models
+  - Custom ResNet-50-style CNN + attention + LSTM trained from scratch
   - Local file-based dataset flow
   - CPU/GPU compatibility
   - Save/load checkpointing

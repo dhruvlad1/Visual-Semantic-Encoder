@@ -5,10 +5,9 @@ from .encoder import EncoderCNN
 
 
 class CombinedModel(nn.Module):
-    def __init__(self, embed_size, hidden_size, vocab_size, attention_dim=256, pretrained=False):
+    def __init__(self, embed_size, hidden_size, vocab_size, attention_dim=256):
         super(CombinedModel, self).__init__()
-        # pretrained=True downloads the ImageNet ResNet-50 weights; use it for training only.
-        self.encoder = EncoderCNN(embed_size, pretrained=pretrained)
+        self.encoder = EncoderCNN(embed_size)
         self.decoder = DecoderWithAttention(embed_size, hidden_size, vocab_size, attention_dim)
 
     def forward(self, images, captions):

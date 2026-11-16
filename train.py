@@ -101,7 +101,7 @@ def main():
     parser.add_argument("--lr", type=float, default=4e-4, help="Learning rate.")
     parser.add_argument("--freq-threshold", type=int, default=5, help="Minimum word frequency for the vocabulary.")
     parser.add_argument("--num-workers", type=int, default=0 if os.name == "nt" else 2, help="DataLoader worker processes.")
-    parser.add_argument("--checkpoint-dir", type=str, default="checkpoints", help="Where checkpoint_img_caption.pth and vocab.txt are written.")
+    parser.add_argument("--checkpoint-dir", type=str, default="checkpoints_custom", help="Where checkpoint_img_caption.pth and vocab.txt are written.")
     parser.add_argument("--resume", type=str, default=None, help="Checkpoint to continue training from.")
     args = parser.parse_args()
 
@@ -110,6 +110,10 @@ def main():
     checkpoint_dir = Path(args.checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_dir / "checkpoint_img_caption.pth"
+    if checkpoint_path.exists() and not args.resume:
+        raise FileExistsError(
+            f"{checkpoint_path} already exists; pass --resume to continue training instead of overwriting it."
+        )
 
     vocab, dataloader = build_vocab_and_dataloader(
         dataset_dir=args.dataset_dir,
@@ -122,8 +126,7 @@ def main():
     vocab.save(vocab_path)
     print(f"Vocabulary saved to {vocab_path}")
 
-    # pretrained=True downloads the ImageNet ResNet-50 weights the first time (needs Internet).
-    model = CombinedModel(EMBED_SIZE, HIDDEN_SIZE, len(vocab), ATTENTION_DIM, pretrained=True).to(device)
+    model = CombinedModel(EMBED_SIZE, HIDDEN_SIZE, len(vocab), ATTENTION_DIM).to(device)
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.stoi["<PAD>"])
     optimizer = optim.Adam([p for p in model.parameters() if p.requires_grad], lr=args.lr)
 
