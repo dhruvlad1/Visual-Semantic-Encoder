@@ -1,6 +1,6 @@
 # Image Captioning Generator
 
-This project is a PyTorch image captioning system that generates natural-language captions from input images using a custom CNN encoder, additive attention, and an LSTM-based decoder. The implementation is intentionally compact and research-oriented: it reads COCO-style caption annotations, builds a vocabulary from the training captions, trains an encoder-decoder model with teacher forcing, and can generate captions and attention maps for individual images.
+This project is a PyTorch image captioning system that generates natural-language captions from input images using a pretrained ResNet-50 encoder, additive attention, and an LSTM-based decoder. The implementation is intentionally compact and research-oriented: it reads COCO-style caption annotations, builds a vocabulary from the training captions, trains an encoder-decoder model with teacher forcing, and can generate captions and attention maps for individual images.
 
 The repository is structured as a small educational / research codebase rather than a production web app or packaged framework. The implementation and training flow are defined directly in the Python source files and can be executed from the project root.
 
@@ -10,7 +10,7 @@ The actual model pipeline in this repository is:
 
 Image
 → image preprocessing
-→ custom CNN encoder
+→ pretrained ResNet-50 encoder (frozen)
 → spatial feature embedding
 → additive attention
 → LSTM decoder
@@ -21,7 +21,7 @@ The architecture is implemented through the modules in the `models/` directory, 
 
 ## Highlights
 
-- ResNet-50-style custom CNN encoder for spatial feature extraction
+- Pretrained ResNet-50 encoder (frozen) for spatial feature extraction
 - Additive soft attention between encoder features and decoder hidden state
 - LSTMCell-based decoder for autoregressive caption generation
 - Vocabulary tokenization and numericalization from COCO captions
@@ -35,7 +35,7 @@ The architecture is implemented through the modules in the `models/` directory, 
 
 ## Example outputs from the project
 
-> The example images below were generated with an earlier encoder version, so captions from the current model may differ.
+> The example images below were generated before the encoder was switched to a pretrained ResNet-50, so captions from the current model will differ.
 
 The repository includes example result images under the `images/` directory. These are useful for understanding the type of output produced by the captioning pipeline: a model-generated caption is compared against the visual content of the image, and the attention maps show which image regions were emphasized while each word was being produced.
 
@@ -101,25 +101,21 @@ Visual-Semantic-Encoder/
 
 ## Model architecture
 
-The model is an encoder-decoder captioning network: a custom CNN image encoder, additive attention, and an LSTM decoder. It is not a transformer.
+The model is an encoder-decoder captioning network: a pretrained ResNet-50 image encoder, additive attention, and an LSTM decoder. It is not a transformer.
 
 ### Encoder
 
 Implemented in `models/encoder.py`.
 
-The encoder is a ResNet-50-style bottleneck CNN with 3-4-6-3 blocks. It is written from scratch, randomly initialised with Kaiming initialisation, and trained end to end. It starts with random weights and does not download ImageNet weights.
+The encoder is an ImageNet-pretrained ResNet-50 with its pooling and classification layers removed. The backbone is frozen (its weights are not trained and its BatchNorm layers stay in eval mode); only the small projection layer on top is trained.
 
 - Input: `(B, 3, 224, 224)`
-- ResNet-50-style bottleneck stages -> feature map `(B, 2048, 7, 7)`
-- after permute and reshape: `(B, 49, 2048)` (49 regions)
+- ResNet-50 convolutional stages -> feature map `(B, 2048, 7, 7)`
+- after permute and reshape: `(B, 49, 2048)`
 - Dropout(0.3)
-- Linear(2048, 256) -> `(B, 49, 256)`
+- Linear(2048, embed_size) -> `(B, num_pixels, embed_size)` where `embed_size = 256`
 
-`EncoderCNN(embed_size)` is defined in `models/encoder.py` and is fully trainable.
-
-### Why a custom CNN encoder
-
-The encoder is a compact ResNet-50-style CNN written from scratch. Its parameters are randomly initialised with Kaiming initialisation and trained end to end with the attention and decoder.
+`EncoderCNN(embed_size, pretrained=False)` only downloads the ImageNet weights when `pretrained=True`, which `train.py` uses. Loading a trained checkpoint does not need an Internet connection.
 
 ### Attention mechanism
 
@@ -163,7 +159,7 @@ Implemented in `models/combined_model.py`.
 
 The model wrapper simply connects:
 
-`EncoderCNN` (ResNet-50-style custom CNN) -> `DecoderWithAttention`
+`EncoderCNN` (ResNet-50) -> `DecoderWithAttention`
 
 with the forward pass:
 
@@ -200,21 +196,21 @@ The actual training logic lives in `train.py` and uses the following default con
 - `--lr` default: `4e-4`
 - `--freq-threshold` default: `5`
 - `--num-workers` default: `0` on Windows, `2` elsewhere
-- `--checkpoint-dir` default: `checkpoints_custom`
+- `--checkpoint-dir` default: `checkpoints`
 - `--resume` optional: continue from an existing checkpoint
 
 The script performs the following steps:
 
 1. Reads the COCO `captions_train2017.json` file.
-2. Builds a vocabulary from all training captions and saves it to `checkpoints_custom/vocab.txt`.
+2. Builds a vocabulary from all training captions and saves it to `checkpoints/vocab.txt`.
 3. Creates `CocoDataset` instances using the image/caption pairs.
 4. Selects a subset of samples using `Subset(dataset, range(subset_size))`.
 5. Constructs a `DataLoader` with `collate_fn=partial(collate_fn, vocab=vocab)`.
-6. Instantiates the custom CNN model and the optimizer.
+6. Instantiates the model (downloading the pretrained ResNet-50 weights the first time) and the optimizer.
 7. Trains using `nn.CrossEntropyLoss(ignore_index=vocab.stoi["<PAD>"])` with gradient clipping.
 8. Saves a checkpoint after every epoch, and writes `loss_curve.png` next to it when training ends.
 
-The optimizer updates all trainable model parameters:
+The optimizer only updates the trainable parameters (the frozen ResNet is skipped):
 
 ```python
 torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr=args.lr)
@@ -301,16 +297,13 @@ Checkpoint behavior is implemented in `utils/checkpoint.py`.
 - `loss`
 - `vocab_itos` (the vocabulary, so the checkpoint is self-contained)
 
-`train.py` also writes the vocabulary to `checkpoints_custom/vocab.txt` (one `index:word` line per entry). The default checkpoint path is:
+`train.py` also writes the vocabulary to `checkpoints/vocab.txt` (one `index:word` line per entry). The default checkpoint path is:
 
 ```text
-checkpoints_custom/checkpoint_img_caption.pth
+checkpoints/checkpoint_img_caption.pth
 ```
 
 The checkpoint directory is created automatically if it does not exist. Checkpoints are not committed to the repository (see `.gitignore`).
-Training refuses to overwrite an existing checkpoint unless `--resume` is used.
-Checkpoints from the earlier ResNet-50 version are not trained from scratch and are kept separately.
-The checkpoint contains the fully trainable custom CNN; it does not hold a separate backbone.
 
 For inference, `load_for_inference(checkpoint_path, vocab_path=None, device="cpu")` rebuilds the model and vocabulary. Model sizes are read from the saved weights, and `vocab_path` is only needed for checkpoints that do not contain a vocabulary. To resume training, `load_checkpoint(model, optimizer, path)` restores the weights and optimizer state.
 
@@ -370,7 +363,7 @@ The repository includes several execution-oriented scripts. Run them from the pr
 Main training entry point.
 
 ```bash
-python train.py --dataset-dir "D:\path\to\coco2017" --epochs 10 --batch-size 64 --subset-size 100000 --checkpoint-dir checkpoints_custom
+python train.py --dataset-dir "D:\path\to\coco2017" --epochs 10 --batch-size 64 --subset-size 100000 --checkpoint-dir checkpoints
 ```
 
 ### `inference/caption_pred.py`
@@ -378,17 +371,17 @@ python train.py --dataset-dir "D:\path\to\coco2017" --epochs 10 --batch-size 64 
 Generates a caption for a single image from a checkpoint and shows the attention map for each word.
 
 ```bash
-python -m inference.caption_pred --image "D:\path\to\image.jpg" --checkpoint checkpoints_custom/checkpoint_img_caption.pth
+python -m inference.caption_pred --image "D:\path\to\image.jpg" --checkpoint checkpoints/checkpoint_img_caption.pth
 ```
 
-Useful options: `--vocab checkpoints_custom/vocab.txt` (only for checkpoints without a built-in vocabulary), `--no-plot` (print the caption only), `--save out.png` (save the attention figure).
+Useful options: `--vocab checkpoints/vocab.txt` (only for checkpoints without a built-in vocabulary), `--no-plot` (print the caption only), `--save out.png` (save the attention figure).
 
 ### `inference/metric_eval.py`
 
 Evaluates a trained model with BLEU on COCO `val2017`.
 
 ```bash
-python -m inference.metric_eval --dataset-dir "D:\path\to\coco2017" --checkpoint checkpoints_custom/checkpoint_img_caption.pth --num-images 500
+python -m inference.metric_eval --dataset-dir "D:\path\to\coco2017" --checkpoint checkpoints/checkpoint_img_caption.pth --num-images 500
 ```
 
 ## Dependencies
@@ -407,45 +400,126 @@ This is the actual dependency set used by the project source files.
 
 ## Environment notes
 
-The project is designed to run with Python 3.11 and the installed PyTorch/TorchVision versions in the working environment. CUDA is optional and selected automatically when available (a GPU is strongly recommended for training). The repository does not ship a custom training runtime or a Dockerfile.
+The project is designed to run with Python 3.11 and the installed PyTorch/TorchVision versions in the working environment. CUDA is optional and selected automatically when available (a GPU is strongly recommended for training). The first training run needs an Internet connection to download the pretrained ResNet-50 weights. The repository does not ship a custom training runtime or a Dockerfile.
 
 ## Quick start
 
 1. Create a virtual environment:
 
 ```bash
-python -m venv .venv
+python -m inference.metric_eval --dataset-dir path/to/coco2017 --checkpoint checkpoints/checkpoint_img_caption.pth --num-images 500
 ```
 
-2. Activate it on Windows PowerShell:
+This needs `val2017/` and `annotations/captions_val2017.json` (see [Training your own model](#training-your-own-model) for the layout).
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
+---
 
-3. Install dependencies:
+## Training your own model
 
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
+### 1. Get the dataset
 
-4. Prepare the COCO dataset in a local directory such as:
+Download **MS COCO 2017** from [cocodataset.org](https://cocodataset.org/#download): the *2017 Train images*, *2017 Val images* and *2017 Train/Val annotations*. Arrange them like this:
 
 ```text
-D:\data\coco2017\
+coco2017/
+├── train2017/                       # about 118,000 training images
+├── val2017/                         # about 5,000 validation images (for BLEU)
+└── annotations/
+    ├── captions_train2017.json
+    └── captions_val2017.json
 ```
 
-5. Train the model:
+Each image has about five human-written captions.
+
+### 2. Train
 
 ```bash
-python train.py --dataset-dir "D:\data\coco2017" --epochs 10 --batch-size 64 --subset-size 100000 --checkpoint-dir checkpoints_custom
+python train.py --dataset-dir path/to/coco2017 --epochs 10 --batch-size 64 --subset-size 100000
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--dataset-dir` | `data/coco2017` | COCO root folder |
+| `--epochs` | `10` | Passes over the selected captions |
+| `--batch-size` | `64` | Samples per training step |
+| `--subset-size` | `100000` | Number of training captions to use. `0` = use all (about 590,000) |
+| `--lr` | `4e-4` | Adam learning rate |
+| `--freq-threshold` | `5` | Minimum word count to enter the vocabulary |
+| `--num-workers` | `0` on Windows, `2` elsewhere | Data-loading worker processes |
+| `--checkpoint-dir` | `checkpoints` | Where the outputs are written |
+| `--resume FILE` | none | Continue from a saved checkpoint |
+
+What happens:
+
+1. All training captions are read and the vocabulary is built and saved to `checkpoints/vocab.txt`.
+2. The first captions (up to `--subset-size`) are used for training.
+3. The pretrained ResNet-50 weights are downloaded the first time (about 100 MB, **Internet needed once**).
+4. After **every epoch** the checkpoint is saved to `checkpoints/checkpoint_img_caption.pth`, so you can stop and resume with `--resume`.
+5. At the end the loss curve is saved to `checkpoints/loss_curve.png`.
+
+Tips:
+
+- **Use a GPU.** A free [Kaggle](https://www.kaggle.com) notebook GPU works well: add a COCO 2017 dataset, switch on the GPU and Internet, and point `--dataset-dir` at the dataset folder.
+- Do a **quick test first** with `--epochs 1 --subset-size 2000` to check that everything runs and to measure the time per epoch.
+- More captions and more epochs generally improve results, but with diminishing returns while the encoder is frozen.
+- The checkpoint is large because it also contains the frozen ResNet weights and the optimizer state.
+
+---
+
+## Checkpoint and vocabulary files
+
+A checkpoint (`.pth`) is a PyTorch file that stores:
+
+| Key | Content |
+|---|---|
+| `epoch` | Index of the last finished epoch |
+| `model_state_dict` | All model weights |
+| `optimizer_state_dict` | Optimizer state, needed only to resume training |
+| `loss` | Average training loss of that epoch |
+| `vocab_itos` | The vocabulary (index to word), so the file is self-contained |
+
+`vocab.txt` holds the same vocabulary as text, one `index:word` pair per line:
+
+```text
+0:<PAD>
+1:<SOS>
+2:<EOS>
+3:<UNK>
+4:a
+5:man
+...
+```
+
+For inference, `utils.checkpoint.load_for_inference(...)` rebuilds the model from the file. It reads the layer sizes from the saved weights themselves, so you do not have to pass the model dimensions.
+
+Good to know:
+
+- A `.pth` file is secretly a **zip archive**. If a download or unzip tool *extracts* it, you end up with a folder named `checkpoint_img_caption.pth` that contains `data.pkl`, `data/` and so on, and loading fails with `Permission denied`. Download the file again, or rebuild it with `python repack_pth.py <unpacked_folder> <new_file.pth>`.
+- The vocabulary and the checkpoint **must come from the same training run**.
+- Checkpoints from the older small-CNN version of this project do not fit the current model.
+
+---
+
+## API reference
+
+The server (`app/server.py`) exposes two endpoints and also serves the web page from the `web/` folder.
+
+### `GET /api/health`
+
+Returns `{"status": "ok"}` once the server is running. The web page calls it on load to wake up a sleeping host.
+
+### `POST /api/caption`
+
+Upload an image as multipart form data in a field named `file`.
+
+```bash
+python train.py --dataset-dir "D:\data\coco2017" --epochs 10 --batch-size 64 --subset-size 100000 --checkpoint-dir checkpoints
 ```
 
 6. Generate a caption for an image:
 
 ```bash
-python -m inference.caption_pred --image "D:\path\to\image.jpg" --checkpoint checkpoints_custom/checkpoint_img_caption.pth
+python -m inference.caption_pred --image "D:\path\to\image.jpg" --checkpoint checkpoints/checkpoint_img_caption.pth
 ```
 
 ## Example outputs
@@ -455,20 +529,19 @@ The repository includes example result images under `images/`. They show the pro
 ## Known project limitations
 
 - The project expects a local COCO dataset and does not include training data in the repository.
-- There is no packaged trained model checkpoint in the repo.
+- There is no packaged pretrained model checkpoint in the repo.
 - There is no web UI, API, or notebook-based demo packaged as a service.
 - Training and evaluation are script-based rather than abstracted into a CLI framework.
 - The implementation is intentionally minimal and focused on core research functionality rather than production polish.
 - The caption generation process is greedy and uses the most probable next token at each step (no beam search).
-- The from-scratch CNN needs enough data and epochs to train well.
-- It has not yet been compared on BLEU with the earlier encoder version.
+- The ResNet-50 encoder is frozen; fine-tuning it, or training on more captions, could improve quality further.
 
 ## Architecture diagram
 
 ```mermaid
 flowchart LR
     A[Input Image] --> B[Resize + Normalize]
-    B --> C[Custom CNN Encoder - ResNet-50-style]
+    B --> C[ResNet-50 Encoder - pretrained, frozen]
     C --> D[Spatial Feature Map]
     D --> E[Additive Attention]
     E --> F[Context Vector]
@@ -481,9 +554,4 @@ flowchart LR
 
 ## Summary
 
-This repository implements a compact, training-capable image captioning system in PyTorch. It uses a custom ResNet-50-style CNN encoder, additive soft attention, and an LSTM-based decoder to generate captions from COCO image-caption pairs. The code is designed to be understandable and practical for study, experimentation, and further refinement, rather than for deployment as a commercial-grade product.
-
-### Glossary
-
-- **ResNet-50-style:** A custom CNN with bottleneck stages containing 3-4-6-3 blocks.
-- **Frozen:** Not used for this encoder; all encoder parameters train end to end.
+This repository implements a compact, training-capable image captioning system in PyTorch. It uses a pretrained ResNet-50 encoder, additive soft attention, and an LSTM-based decoder to generate captions from COCO image-caption pairs. The code is designed to be understandable and practical for study, experimentation, and further refinement, rather than for deployment as a commercial-grade product.
