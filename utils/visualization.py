@@ -62,7 +62,7 @@ def visualize_attention(image, caption, alphas, cols=5, save_path=None):
         att_map = alphas[i].reshape(side, side).astype(np.float32)
         att_resized = np.array(Image.fromarray(att_map).resize((width, height), resample=Image.BILINEAR))
         axes[i].imshow(img_np)
-        axes[i].imshow(att_resized, alpha=0.6, cmap="jet")
+        axes[i].imshow(att_resized, alpha=0.5, cmap="jet")
         axes[i].set_title(word)
 
     plt.tight_layout()

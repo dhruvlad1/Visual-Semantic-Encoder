@@ -1,9 +1,9 @@
 """Re-zips an unpacked PyTorch checkpoint folder back into a single .pth file.
 
 Usage:
-    python repack_pth.py "<folder that contains data.pkl>" <output .pth file>
+    python scripts\\repack_pth.py "<folder that contains data.pkl>" <output .pth file>
 Example:
-    python repack_pth.py "C:\\Users\\you\\Downloads\\checkpoint_img_caption.pth" checkpoints\\checkpoint_img_caption.pth
+    python scripts\\repack_pth.py "C:\\Users\\you\\Downloads\\checkpoint_img_caption.pth" checkpoints_custom\\checkpoint_img_caption.pth
 """
 import os
 import sys

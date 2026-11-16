@@ -341,11 +341,7 @@ async function generateCaption(file) {
     if (activeController !== controller) {
       return;
     }
-    if (error.name === "AbortError") {
-      showError(friendlyRequestError(error), elements.resultError);
-    } else {
-      showError(friendlyRequestError(error), elements.resultError);
-    }
+    showError(friendlyRequestError(error), elements.resultError);
     elements.retryButton.hidden = false;
   } finally {
     window.clearTimeout(timeoutId);

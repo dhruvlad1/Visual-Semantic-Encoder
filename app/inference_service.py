@@ -1,6 +1,7 @@
 import argparse
 import base64
 import io
+import math
 import re
 import threading
 from pathlib import Path
@@ -74,7 +75,9 @@ class CaptionService:
 
     @staticmethod
     def _create_heatmap(display_image: Image.Image, alpha: np.ndarray) -> Image.Image:
-        attention = np.asarray(alpha, dtype=np.float32).reshape(7, 7)
+        attention = np.asarray(alpha, dtype=np.float32)
+        side = int(round(math.sqrt(attention.size)))
+        attention = attention.reshape(side, side)
         minimum = float(attention.min())
         maximum = float(attention.max())
         if maximum > minimum:
